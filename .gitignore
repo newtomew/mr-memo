@@ -13,3 +13,4 @@ coverage/
 .vercel
 .env*
 .claude/
+PLATFORM_ADMIN_CREDENTIALS.md

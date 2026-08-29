@@ -6,5 +6,8 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/stale-check", "schedule": "0 3 * * *" }
   ]
 }

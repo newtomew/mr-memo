@@ -9,6 +9,7 @@ const STATUS_STYLES: Record<MemoStatus, string> = {
   REJECTED: 'bg-red-100 text-red-700',
   APPROVED: 'bg-emerald-100 text-emerald-700',
   CANCELLED: 'bg-slate-200 text-slate-500',
+  BLOCKED: 'bg-red-200 text-red-800',
 }
 
 const STATUS_LABELS: Record<MemoStatus, string> = {
@@ -20,6 +21,7 @@ const STATUS_LABELS: Record<MemoStatus, string> = {
   REJECTED: 'Rejected',
   APPROVED: 'Approved',
   CANCELLED: 'Cancelled',
+  BLOCKED: 'Blocked',
 }
 
 export function StatusBadge({ status }: { status: MemoStatus }) {

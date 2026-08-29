@@ -336,6 +336,31 @@ export async function submitMemo(req: VercelRequest, res: VercelResponse, memoId
       message: `${ctx.user.name} submitted "${memo.subject}" (${memo.memoNumber}) for your review`,
     })
 
+    if (!isResubmit) {
+      // Org-wide visibility for Managers/Admins even when they aren't the
+      // assigned approver on this particular memo (Issue 2: "what's new").
+      const managers = await prisma.user.findMany({
+        where: {
+          organizationId: ctx.organizationId,
+          status: 'ACTIVE',
+          role: { in: ['ADMIN', 'MANAGER'] },
+          id: { notIn: [ctx.user.id, firstApprover.userId] },
+        },
+        select: { id: true },
+      })
+      await Promise.all(
+        managers.map((m) =>
+          notify({
+            organizationId: ctx.organizationId,
+            userId: m.id,
+            memoId,
+            type: 'NEW_MEMO',
+            message: `${ctx.user.name} submitted a new memo "${memo.subject}" (${memo.memoNumber})`,
+          })
+        )
+      )
+    }
+
     await logAudit({
       organizationId: ctx.organizationId,
       userId: ctx.user.id,

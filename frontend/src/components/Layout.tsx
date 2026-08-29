@@ -10,6 +10,7 @@ const navItems = [
   { to: '/memos/mine', label: 'My Memos' },
   { to: '/memos/new', label: 'Create Memo' },
   { to: '/search', label: 'Search' },
+  { to: '/messages', label: 'Messages' },
 ]
 
 export function Layout() {
@@ -89,6 +90,18 @@ export function Layout() {
                   {item.label}
                 </NavLink>
               ))}
+              {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+                <NavLink
+                  to="/join-requests"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition ${
+                      isActive ? 'bg-white/20' : 'hover:bg-white/10'
+                    }`
+                  }
+                >
+                  Join Requests
+                </NavLink>
+              )}
               {user?.role === 'ADMIN' && (
                 <NavLink
                   to="/admin"

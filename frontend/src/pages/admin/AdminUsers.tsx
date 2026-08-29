@@ -34,8 +34,9 @@ export default function AdminUsers() {
     }
   }
 
-  async function toggleRole(user: User) {
-    await api.put(`/admin/users/${user.id}`, { role: user.role === 'ADMIN' ? 'USER' : 'ADMIN' })
+  async function changeRole(user: User, role: string) {
+    if (role === user.role) return
+    await api.put(`/admin/users/${user.id}`, { role })
     load()
   }
 
@@ -84,7 +85,8 @@ export default function AdminUsers() {
             <div>
               <Label>Role</Label>
               <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                <option value="USER">Regular User</option>
+                <option value="USER">Employee</option>
+                <option value="MANAGER">Manager</option>
                 <option value="ADMIN">Administrator</option>
               </Select>
             </div>
@@ -117,19 +119,41 @@ export default function AdminUsers() {
                 <td className="px-4 py-3 text-slate-500">{u.email}</td>
                 <td className="px-4 py-3 text-slate-500">{u.department?.name || '—'}</td>
                 <td className="px-4 py-3">
-                  <span className={`badge ${u.role === 'ADMIN' ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-600'}`}>
+                  <span
+                    className={`badge ${
+                      u.role === 'ADMIN'
+                        ? 'bg-brand-100 text-brand-700'
+                        : u.role === 'MANAGER'
+                          ? 'bg-teal-100 text-teal-700'
+                          : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
                     {u.role}
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`badge ${u.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                  <span
+                    className={`badge ${
+                      u.status === 'ACTIVE'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : u.status === 'PENDING_APPROVAL'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
                     {u.status}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right space-x-2">
-                  <button onClick={() => toggleRole(u)} className="text-xs text-brand-600 hover:underline">
-                    Make {u.role === 'ADMIN' ? 'User' : 'Admin'}
-                  </button>
+                  <Select
+                    value={u.role}
+                    onChange={(e) => changeRole(u, e.target.value)}
+                    className="inline-block w-auto py-1 text-xs"
+                  >
+                    <option value="USER">Employee</option>
+                    <option value="MANAGER">Manager</option>
+                    <option value="ADMIN">Administrator</option>
+                  </Select>
                   {u.status === 'ACTIVE' && (
                     <button onClick={() => deactivate(u)} className="text-xs text-red-600 hover:underline">
                       Deactivate

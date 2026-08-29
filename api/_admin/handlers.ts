@@ -44,7 +44,7 @@ const createUserSchema = z.object({
   name: z.string().min(1),
   designation: z.string().optional(),
   departmentId: z.string().uuid().optional().nullable(),
-  role: z.enum(['ADMIN', 'USER']).optional(),
+  role: z.enum(['ADMIN', 'MANAGER', 'USER']).optional(),
 })
 
 /** POST /api/admin/users — admin invites/creates a user in their org */
@@ -96,7 +96,7 @@ const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   designation: z.string().optional().nullable(),
   departmentId: z.string().uuid().optional().nullable(),
-  role: z.enum(['ADMIN', 'USER']).optional(),
+  role: z.enum(['ADMIN', 'MANAGER', 'USER']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
 })
 

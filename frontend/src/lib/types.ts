@@ -1,5 +1,5 @@
-export type UserRole = 'ADMIN' | 'USER'
-export type UserStatus = 'ACTIVE' | 'INACTIVE'
+export type UserRole = 'ADMIN' | 'MANAGER' | 'USER'
+export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING_APPROVAL'
 export type MemoPriority = 'NORMAL' | 'HIGH' | 'URGENT'
 export type MemoStatus =
   | 'DRAFT'
@@ -10,6 +10,7 @@ export type MemoStatus =
   | 'REJECTED'
   | 'APPROVED'
   | 'CANCELLED'
+  | 'BLOCKED'
 export type WorkflowStepStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'SKIPPED'
 export type ApprovalDecision = 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'FORWARDED' | 'COMMENTED'
 export type CommentType = 'GENERAL' | 'APPROVAL' | 'REJECTION' | 'CHANGE_REQUEST'
@@ -22,6 +23,13 @@ export type NotificationType =
   | 'RESUBMITTED'
   | 'COMPLETED'
   | 'ASSIGNED'
+  | 'JOIN_REQUEST_SUBMITTED'
+  | 'JOIN_REQUEST_APPROVED'
+  | 'JOIN_REQUEST_REJECTED'
+  | 'NEW_MESSAGE'
+  | 'STALE_PENDING'
+  | 'NEW_MEMO'
+export type JoinRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 
 export interface Organization {
   id: string
@@ -54,8 +62,43 @@ export interface User {
   designation?: string | null
   role: UserRole
   status: UserStatus
+  avatarUrl?: string | null
+  lastLoginAt?: string | null
+  createdAt?: string
   department?: Department | null
   organization?: Organization
+}
+
+export interface PlatformAdmin {
+  id: string
+  email: string
+  name: string
+  createdAt: string
+}
+
+export interface JoinRequest {
+  id: string
+  requestedRole: UserRole
+  status: JoinRequestStatus
+  createdAt: string
+  rejectionReason?: string | null
+  user: { id: string; name: string; email: string; createdAt: string }
+  organization?: { id: string; name: string; slug: string }
+}
+
+export interface Message {
+  id: string
+  senderId: string
+  recipientId: string
+  content: string
+  read: boolean
+  createdAt: string
+}
+
+export interface Conversation {
+  peer: { id: string; name: string; avatarUrl?: string | null; role: UserRole }
+  lastMessage: Message
+  unread: number
 }
 
 export interface WorkflowApproval {

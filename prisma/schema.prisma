@@ -17,12 +17,20 @@ datasource db {
 
 enum UserRole {
   ADMIN
+  MANAGER
   USER
 }
 
 enum UserStatus {
   ACTIVE
   INACTIVE
+  PENDING_APPROVAL
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum MemoPriority {
@@ -40,6 +48,7 @@ enum MemoStatus {
   REJECTED
   APPROVED
   CANCELLED
+  BLOCKED
 }
 
 enum WorkflowStepStatus {
@@ -74,6 +83,12 @@ enum NotificationType {
   RESUBMITTED
   COMPLETED
   ASSIGNED
+  JOIN_REQUEST_SUBMITTED
+  JOIN_REQUEST_APPROVED
+  JOIN_REQUEST_REJECTED
+  NEW_MESSAGE
+  STALE_PENDING
+  NEW_MEMO
 }
 
 enum EntityStatus {
@@ -86,13 +101,14 @@ enum EntityStatus {
 // ============================================================
 
 model Organization {
-  id           String   @id @default(uuid())
+  id           String       @id @default(uuid())
   name         String
-  slug         String   @unique
+  slug         String       @unique
   logoUrl      String?
   contactEmail String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  status       EntityStatus @default(ACTIVE) // platform-admin ban switch
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   departments        Department[]
   users              User[]
@@ -107,6 +123,8 @@ model Organization {
   workflowTemplates  WorkflowTemplate[]
   delegations        Delegation[]
   auditLogs          AuditLog[]
+  joinRequests       JoinRequest[]
+  messages           Message[]
 
   @@map("organizations")
 }
@@ -146,6 +164,8 @@ model User {
   designation String?
   role        UserRole   @default(USER)
   status      UserStatus @default(ACTIVE)
+  avatarUrl   String?
+  lastLoginAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -161,11 +181,86 @@ model User {
   delegationsGiven    Delegation[]        @relation("DelegatingUser")
   delegationsReceived Delegation[]        @relation("DelegateUser")
   auditLogs           AuditLog[]          @relation("AuditActor")
+  joinRequest          JoinRequest?       @relation("JoinRequestUser")
+  joinRequestsReviewed JoinRequest[]      @relation("JoinRequestReviewerUser")
+  messagesSent        Message[]           @relation("MessageSender")
+  messagesReceived    Message[]           @relation("MessageRecipient")
 
   @@unique([organizationId, email])
   @@index([organizationId])
   @@index([departmentId])
   @@map("users")
+}
+
+// ============================================================
+// PLATFORM ADMINISTRATION (super-admin tier, above all tenants)
+// ============================================================
+
+/// Exactly a handful of accounts (product-owner controlled), not tied to any
+/// single organization. Distinct from an org's own ADMIN role.
+model PlatformAdmin {
+  id     String @id @default(uuid())
+  authId String @unique // Supabase auth.users.id
+  email  String @unique
+  name   String
+
+  createdAt DateTime @default(now())
+
+  joinRequestsReviewed JoinRequest[] @relation("JoinRequestReviewerPlatformAdmin")
+
+  @@map("platform_admins")
+}
+
+/// A request to join an EXISTING organization as MANAGER or USER (employee).
+/// Brand-new organization creation stays instant/self-service (Organization
+/// + its first ADMIN are created directly by /auth/register) — this model
+/// only covers people joining an org that already exists.
+model JoinRequest {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String       @unique
+  user           User         @relation("JoinRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  requestedRole UserRole // MANAGER or USER
+  status        JoinRequestStatus @default(PENDING)
+
+  reviewedByUserId          String?
+  reviewedByUser            User?           @relation("JoinRequestReviewerUser", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedByPlatformAdminId String?
+  reviewedByPlatformAdmin   PlatformAdmin?  @relation("JoinRequestReviewerPlatformAdmin", fields: [reviewedByPlatformAdminId], references: [id], onDelete: SetNull)
+  reviewedAt                DateTime?
+  rejectionReason           String?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("join_requests")
+}
+
+// ============================================================
+// MESSAGING (1:1, within an organization)
+// ============================================================
+
+model Message {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId    String
+  recipient      User         @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  content String   @db.Text
+  read    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([senderId, recipientId])
+  @@index([recipientId, read])
+  @@map("messages")
 }
 
 // ============================================================

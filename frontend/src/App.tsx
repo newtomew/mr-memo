@@ -20,8 +20,15 @@ const CreateMemo = lazy(() => import('@/pages/CreateMemo'))
 const MemoDetail = lazy(() => import('@/pages/MemoDetail'))
 const SearchPage = lazy(() => import('@/pages/SearchPage'))
 const Profile = lazy(() => import('@/pages/Profile'))
+const Messages = lazy(() => import('@/pages/Messages'))
+const JoinRequests = lazy(() => import('@/pages/JoinRequests'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 const Unauthorized = lazy(() => import('@/pages/Unauthorized'))
+const PlatformLogin = lazy(() => import('@/pages/platform/PlatformLogin'))
+const PlatformLayout = lazy(() => import('@/pages/platform/PlatformLayout'))
+const PlatformOrganizations = lazy(() => import('@/pages/platform/PlatformOrganizations'))
+const PlatformOrgDetail = lazy(() => import('@/pages/platform/PlatformOrgDetail'))
+const PlatformApprovals = lazy(() => import('@/pages/platform/PlatformApprovals'))
 const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'))
 const AdminDashboard = lazy(() => import('@/pages/admin/AdminDashboard'))
 const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'))
@@ -49,6 +56,13 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
 
+          <Route path="/platform/login" element={<PlatformLogin />} />
+          <Route path="/platform" element={<PlatformLayout />}>
+            <Route index element={<PlatformOrganizations />} />
+            <Route path="organizations/:id" element={<PlatformOrgDetail />} />
+            <Route path="approvals" element={<PlatformApprovals />} />
+          </Route>
+
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<Dashboard />} />
@@ -59,6 +73,8 @@ export default function App() {
               <Route path="/memos/:id/edit" element={<CreateMemo />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/messages" element={<Messages />} />
+              <Route path="/join-requests" element={<JoinRequests />} />
 
               <Route element={<AdminRoute />}>
                 <Route path="/admin" element={<AdminLayout />}>

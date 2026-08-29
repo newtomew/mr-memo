@@ -11,6 +11,10 @@ import * as notificationH from './_notifications/handlers'
 import * as searchH from './_search/handlers'
 import * as adminH from './_admin/handlers'
 import * as delegationH from './_delegations/handlers'
+import * as joinRequestH from './_join-requests/handlers'
+import * as platformH from './_platform/handlers'
+import * as messageH from './_messages/handlers'
+import * as cronH from './_cron/handlers'
 
 /**
  * Single catch-all Vercel serverless function. All /api/* traffic is routed
@@ -33,6 +37,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (segments[1] === 'me' && method === 'GET') return authH.me(req, res)
       if (segments[1] === 'change-password' && method === 'POST') return authH.changePassword(req, res)
       if (segments[1] === 'profile' && method === 'PUT') return authH.updateProfile(req, res)
+      if (segments[1] === 'organizations' && method === 'GET') return authH.searchOrganizations(req, res)
+      if (segments[1] === 'join' && method === 'POST') return authH.joinOrganization(req, res)
+      if (segments[1] === 'avatar' && method === 'POST') return authH.uploadAvatar(req, res)
+      if (segments[1] === 'email' && method === 'PUT') return authH.changeEmail(req, res)
     }
 
     // ---- /api/memos ----
@@ -138,6 +146,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (segments.length === 2 && method === 'GET') return adminH.listWorkflowTemplates(req, res)
         if (segments.length === 2 && method === 'POST') return adminH.createWorkflowTemplate(req, res)
         if (segments.length === 3 && method === 'DELETE') return adminH.deleteWorkflowTemplate(req, res, segments[2])
+      }
+    }
+
+    // ---- /api/cron/stale-check (Vercel Cron only, guarded by CRON_SECRET) ----
+    if (segments[0] === 'cron' && segments[1] === 'stale-check' && method === 'GET') {
+      return cronH.staleCheck(req, res)
+    }
+
+    // ---- /api/messages (1:1 messaging inbox) ----
+    if (segments[0] === 'messages') {
+      if (segments.length === 1 && method === 'GET') return messageH.listConversations(req, res)
+      if (segments.length === 1 && method === 'POST') return messageH.sendMessage(req, res)
+      if (segments.length === 2 && method === 'GET') return messageH.getThread(req, res, segments[1])
+    }
+
+    // ---- /api/join-requests (org-level: Employee requests only) ----
+    if (segments[0] === 'join-requests') {
+      if (segments.length === 1 && method === 'GET') return joinRequestH.listJoinRequests(req, res)
+      if (segments.length === 3 && segments[2] === 'approve' && method === 'POST') {
+        return joinRequestH.approveJoinRequest(req, res, segments[1])
+      }
+      if (segments.length === 3 && segments[2] === 'reject' && method === 'POST') {
+        return joinRequestH.rejectJoinRequest(req, res, segments[1])
+      }
+    }
+
+    // ---- /api/platform/* (platform-admin super-panel) ----
+    if (segments[0] === 'platform') {
+      if (segments[1] === 'login' && method === 'POST') return platformH.platformLogin(req, res)
+      if (segments[1] === 'me' && method === 'GET') return platformH.platformMe(req, res)
+
+      if (segments[1] === 'organizations') {
+        if (segments.length === 2 && method === 'GET') return platformH.listOrganizations(req, res)
+        if (segments.length === 3 && method === 'GET') return platformH.getOrganization(req, res, segments[2])
+        if (segments.length === 4 && segments[3] === 'ban' && method === 'PUT') {
+          return platformH.setOrganizationBanned(req, res, segments[2])
+        }
+      }
+
+      if (segments[1] === 'users' && segments.length === 4 && segments[3] === 'ban' && method === 'PUT') {
+        return platformH.setUserBanned(req, res, segments[2])
+      }
+
+      if (segments[1] === 'memos' && segments.length === 4 && segments[3] === 'block' && method === 'PUT') {
+        return platformH.setMemoBlocked(req, res, segments[2])
+      }
+
+      if (segments[1] === 'join-requests') {
+        if (segments.length === 2 && method === 'GET') return platformH.listPlatformJoinRequests(req, res)
+        if (segments.length === 4 && segments[3] === 'approve' && method === 'POST') {
+          return platformH.approvePlatformJoinRequest(req, res, segments[2])
+        }
+        if (segments.length === 4 && segments[3] === 'reject' && method === 'POST') {
+          return platformH.rejectPlatformJoinRequest(req, res, segments[2])
+        }
       }
     }
 

@@ -380,6 +380,213 @@ async function main() {
     assert(!cats.json.data.categories.some((c: any) => c.id === catAId), 'org A category not visible to org B')
   })
 
+  console.log('\n\x1b[1mMessaging (Issue 3)\x1b[0m')
+  let messageThreadWith = ''
+  await test('admin A sends a message to manager A', async () => {
+    const res = await call('/messages', { method: 'POST', token: adminAToken, body: { recipientId: managerAId, content: 'QA hello manager' } })
+    assertEqual(res.status, 201, 'send message')
+    messageThreadWith = managerAId
+  })
+  await test('manager A sees the message in their thread with admin A', async () => {
+    const res = await call(`/messages/${adminAId}`, { token: managerAToken })
+    assertEqual(res.status, 200, 'get thread')
+    assert(res.json.data.messages.some((m: any) => m.content === 'QA hello manager'), 'message present in thread')
+  })
+  await test('admin A’s conversation list includes manager A with the last message', async () => {
+    const res = await call('/messages', { token: adminAToken })
+    assertEqual(res.status, 200, 'list conversations')
+    const convo = res.json.data.conversations.find((c: any) => c.peer.id === messageThreadWith)
+    assert(convo, 'conversation with manager A present')
+    assertEqual(convo.lastMessage.content, 'QA hello manager', 'last message content matches')
+  })
+  await test('org B admin cannot open a thread with an org A user (tenant isolation)', async () => {
+    const res = await call(`/messages/${managerAId}`, { token: adminBToken })
+    assertEqual(res.status, 404, 'cross-tenant thread blocked')
+  })
+  await test('sending a message to a nonexistent recipient fails 404', async () => {
+    const res = await call('/messages', { method: 'POST', token: adminAToken, body: { recipientId: 'not-a-real-id', content: 'x' } })
+    assertEqual(res.status, 404, 'unknown recipient')
+  })
+
+  console.log('\n\x1b[1mJoin requests — Employee (Issue 5)\x1b[0m')
+  const joinEmployeeEmail = `qa-join-employee-${RUN_ID}@qatest.local`
+  let joinEmployeeRequestId = ''
+  await test('a new person requests to join org A as an Employee', async () => {
+    createdAuthEmails.push(joinEmployeeEmail)
+    const res = await call('/auth/join', {
+      method: 'POST',
+      body: { organizationId: orgAId, name: 'QA Join Employee', email: joinEmployeeEmail, password: PW, requestedRole: 'USER' },
+    })
+    assertEqual(res.status, 201, 'join request submitted')
+  })
+  await test('the pending Employee cannot log in yet', async () => {
+    const res = await call('/auth/login', { method: 'POST', body: { email: joinEmployeeEmail, password: PW } })
+    assertEqual(res.status, 403, 'blocked until approved')
+  })
+  await test('org A admin sees the pending Employee join request', async () => {
+    const res = await call('/join-requests', { token: adminAToken })
+    assertEqual(res.status, 200, 'list join requests')
+    const found = res.json.data.requests.find((r: any) => r.user.email === joinEmployeeEmail)
+    assert(found, 'request visible to org A reviewer')
+    joinEmployeeRequestId = found.id
+  })
+  await test('org B admin cannot approve org A’s join request (tenant isolation)', async () => {
+    const res = await call(`/join-requests/${joinEmployeeRequestId}/approve`, { method: 'POST', token: adminBToken })
+    assertEqual(res.status, 404, 'cross-tenant join request blocked')
+  })
+  await test('org A admin approves the Employee join request', async () => {
+    const res = await call(`/join-requests/${joinEmployeeRequestId}/approve`, { method: 'POST', token: adminAToken })
+    assertEqual(res.status, 200, 'approved')
+  })
+  await test('the approved Employee can now log in', async () => {
+    const res = await call('/auth/login', { method: 'POST', body: { email: joinEmployeeEmail, password: PW } })
+    assertEqual(res.status, 200, 'login succeeds post-approval')
+  })
+
+  console.log('\n\x1b[1mJoin requests — Manager (Issue 5, platform-reviewed)\x1b[0m')
+  const joinManagerEmail = `qa-join-manager-${RUN_ID}@qatest.local`
+  let joinManagerRequestId = ''
+  let platformAdminToken = ''
+  await test('a new person requests to join org A as a Manager', async () => {
+    createdAuthEmails.push(joinManagerEmail)
+    const res = await call('/auth/join', {
+      method: 'POST',
+      body: { organizationId: orgAId, name: 'QA Join Manager', email: joinManagerEmail, password: PW, requestedRole: 'MANAGER' },
+    })
+    assertEqual(res.status, 201, 'join request submitted')
+  })
+  await test('org A admin cannot approve a Manager join request (platform-only)', async () => {
+    const list = await call('/join-requests', { token: adminAToken })
+    const found = list.json.data.requests.find((r: any) => r.user.email === joinManagerEmail)
+    assert(!found, 'Manager request is not listed for org-level reviewers')
+  })
+  await test('platform administrator can log in', async () => {
+    assert(process.env.PLATFORM_ADMIN_EMAIL && process.env.PLATFORM_ADMIN_PASSWORD, 'PLATFORM_ADMIN_EMAIL/PASSWORD must be set in .env for this test')
+    const res = await call('/platform/login', {
+      method: 'POST',
+      body: { email: process.env.PLATFORM_ADMIN_EMAIL, password: process.env.PLATFORM_ADMIN_PASSWORD },
+    })
+    assertEqual(res.status, 200, 'platform admin login')
+    platformAdminToken = res.json.data.session.accessToken
+  })
+  await test('platform admin sees the pending Manager join request', async () => {
+    const res = await call('/platform/join-requests', { token: platformAdminToken })
+    assertEqual(res.status, 200, 'list platform join requests')
+    const found = res.json.data.requests.find((r: any) => r.user.email === joinManagerEmail)
+    assert(found, 'Manager request visible platform-wide')
+    joinManagerRequestId = found.id
+  })
+  await test('platform admin approves the Manager join request', async () => {
+    const res = await call(`/platform/join-requests/${joinManagerRequestId}/approve`, { method: 'POST', token: platformAdminToken })
+    assertEqual(res.status, 200, 'approved')
+  })
+  await test('the approved Manager can now log in with the Manager role', async () => {
+    const res = await call('/auth/login', { method: 'POST', body: { email: joinManagerEmail, password: PW } })
+    assertEqual(res.status, 200, 'login succeeds post-approval')
+    assertEqual(res.json.data.user.role, 'MANAGER', 'role is MANAGER')
+  })
+
+  console.log('\n\x1b[1mPlatform admin panel (Issue 7)\x1b[0m')
+  await test('platform admin lists organizations, including org A', async () => {
+    const res = await call('/platform/organizations', { token: platformAdminToken })
+    assertEqual(res.status, 200, 'list organizations')
+    assert(res.json.data.organizations.some((o: any) => o.id === orgAId), 'org A present')
+  })
+  await test('platform admin views org A detail with managers/employees/memos', async () => {
+    const res = await call(`/platform/organizations/${orgAId}`, { token: platformAdminToken })
+    assertEqual(res.status, 200, 'org detail')
+    // managerAId/employeeAId are just fixture names — both were created with the
+    // default role USER, so they surface as employees rather than managers.
+    assert(res.json.data.admins.some((a: any) => a.id === adminAId), 'admin A listed')
+    assert(res.json.data.employees.some((e: any) => e.id === managerAId), 'fixture "manager" A (role USER) listed under employees')
+    assert(res.json.data.employees.some((e: any) => e.id === employeeAId), 'employee A listed')
+    assert(res.json.data.memos.length > 0, 'memos listed')
+  })
+  await test('platform admin bans employee A, blocking their login', async () => {
+    const ban = await call(`/platform/users/${employeeAId}/ban`, { method: 'PUT', token: platformAdminToken, body: { banned: true } })
+    assertEqual(ban.status, 200, 'ban user')
+    const loginRes = await call('/auth/login', { method: 'POST', body: { email: employeeAEmail, password: PW } })
+    assertEqual(loginRes.status, 403, 'banned employee cannot log in')
+  })
+  await test('platform admin unbans employee A, restoring their login', async () => {
+    const unban = await call(`/platform/users/${employeeAId}/ban`, { method: 'PUT', token: platformAdminToken, body: { banned: false } })
+    assertEqual(unban.status, 200, 'unban user')
+    const loginRes = await call('/auth/login', { method: 'POST', body: { email: employeeAEmail, password: PW } })
+    assertEqual(loginRes.status, 200, 'unbanned employee can log in again')
+  })
+  await test('platform admin bans org B entirely, blocking every org B login', async () => {
+    const ban = await call(`/platform/organizations/${orgBId}/ban`, { method: 'PUT', token: platformAdminToken, body: { banned: true } })
+    assertEqual(ban.status, 200, 'ban organization')
+    const loginRes = await call('/auth/login', { method: 'POST', body: { email: ORG_B_ADMIN_EMAIL, password: PW } })
+    assertEqual(loginRes.status, 403, 'org B admin blocked while org is banned')
+  })
+  await test('platform admin unbans org B, restoring access', async () => {
+    const unban = await call(`/platform/organizations/${orgBId}/ban`, { method: 'PUT', token: platformAdminToken, body: { banned: false } })
+    assertEqual(unban.status, 200, 'unban organization')
+    const loginRes = await call('/auth/login', { method: 'POST', body: { email: ORG_B_ADMIN_EMAIL, password: PW } })
+    assertEqual(loginRes.status, 200, 'org B admin can log in again')
+  })
+  await test('platform admin blocks a memo, then unblocks it', async () => {
+    const block = await call(`/platform/memos/${singleStepMemoId}/block`, { method: 'PUT', token: platformAdminToken, body: { blocked: true } })
+    assertEqual(block.status, 200, 'block memo')
+    assertEqual(block.json.data.memo.status, 'BLOCKED', 'memo status is BLOCKED')
+    const unblock = await call(`/platform/memos/${singleStepMemoId}/block`, { method: 'PUT', token: platformAdminToken, body: { blocked: false } })
+    assertEqual(unblock.status, 200, 'unblock memo')
+    assertEqual(unblock.json.data.memo.status, 'PENDING_REVIEW', 'memo restored to PENDING_REVIEW')
+  })
+
+  console.log('\n\x1b[1mProfile: avatar + email (Issue 4)\x1b[0m')
+  const TINY_PNG_B64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+  await test('employee A uploads a profile picture', async () => {
+    const res = await call('/auth/avatar', { method: 'POST', token: employeeAToken, body: { mimeType: 'image/png', base64Data: TINY_PNG_B64 } })
+    assertEqual(res.status, 200, 'avatar upload')
+    assert(typeof res.json.data.user.avatarUrl === 'string' && res.json.data.user.avatarUrl.length > 0, 'avatarUrl set')
+  })
+  await test('employee A changes their login email', async () => {
+    const newEmail = `qa-employee-a-new-${RUN_ID}@qatest.local`
+    createdAuthEmails.push(newEmail)
+    const res = await call('/auth/email', { method: 'PUT', token: employeeAToken, body: { newEmail } })
+    assertEqual(res.status, 200, 'email change')
+    assertEqual(res.json.data.user.email, newEmail, 'email updated')
+    const oldLogin = await call('/auth/login', { method: 'POST', body: { email: employeeAEmail, password: PW } })
+    assertEqual(oldLogin.status, 401, 'old email no longer works')
+    const newLogin = await call('/auth/login', { method: 'POST', body: { email: newEmail, password: PW } })
+    assertEqual(newLogin.status, 200, 'new email works')
+  })
+
+  console.log('\n\x1b[1mCron endpoint auth guard (Issue 2)\x1b[0m')
+  await test('stale-check cron endpoint rejects requests with no secret', async () => {
+    const res = await call('/cron/stale-check')
+    assertEqual(res.status, 401, 'unauthorized without CRON_SECRET')
+  })
+  await test('stale-check cron endpoint rejects requests with the wrong secret', async () => {
+    const res = await call('/cron/stale-check', { token: 'wrong-secret' })
+    assertEqual(res.status, 401, 'unauthorized with wrong secret')
+  })
+
+  console.log('\n\x1b[1mNew-org-mid-session tenant isolation (Issue 6)\x1b[0m')
+  let orgCId = ''
+  let adminCToken = ''
+  const ORG_C_ADMIN_EMAIL = `qa-admin-c-${RUN_ID}@qatest.local`
+  await test('a brand-new organization created mid-run is fully isolated from org A', async () => {
+    const data = await registerOrgAdmin(`QA Org C ${RUN_ID}`, 'QA Admin C', ORG_C_ADMIN_EMAIL)
+    orgCId = data.organization.id
+    const loginData = await login(ORG_C_ADMIN_EMAIL)
+    adminCToken = loginData.session.accessToken
+    assert(orgCId !== orgAId && orgCId !== orgBId, 'org C is a distinct organization')
+
+    const search = await call('/search?q=QA', { token: adminCToken })
+    assertEqual(search.status, 200, 'org C can search')
+    assert(search.json.data.memos.length === 0, 'org C sees none of org A/B’s memos immediately after signup')
+
+    const users = await call('/admin/users', { token: adminCToken })
+    assertEqual(users.json.data.users.length, 1, 'org C starts with exactly its own admin')
+
+    const crossOrg = await call(`/messages/${managerAId}`, { token: adminCToken })
+    assertEqual(crossOrg.status, 404, 'org C cannot message an org A user it has no relationship with')
+  })
+
   // -------------------------------------------------------------- report
   console.log('\n' + '─'.repeat(60))
   const passed = results.filter((r) => r.pass).length
