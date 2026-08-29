@@ -326,7 +326,7 @@ the server process's life. Login now uses a disposable client instead
 ## 26.10 Deployment Information
 
 - **Live System**: [https://mr-memo.vercel.app](https://mr-memo.vercel.app) — demo credentials: `admin@demo.com` / `Demo123!` (also `employee@demo.com`, `manager@demo.com`, `finance@demo.com`, `hr@demo.com`, all same password)
-- **Source Code ZIP**: `mr-memo-source.zip` (included alongside this document) — `[fill in the upload URL once you host it, e.g. Google Drive/Dropbox/GitHub release]`
+- **Source Code ZIP**: [https://github.com/newtomew/mr-memo/archive/refs/heads/main.zip](https://github.com/newtomew/mr-memo/archive/refs/heads/main.zip) — GitHub's auto-generated archive of the `main` branch, always in sync with the deployed commit, contains the complete source tree including `prisma/migrations`
 - **Installation Instructions**: see [`README.md`](./README.md) in this
   repository — covers prerequisites, Supabase setup, environment
   configuration, database migration, seeding, local run, and production
