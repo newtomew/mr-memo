@@ -257,16 +257,66 @@ viewer, self-service profile editing, forgot-password flow, PDF export
 completeness, reporting by department/category and average completion
 time, and more).
 
+## 26.8b Extended Features (Post-Submission, Beyond CSE226 Scope)
+
+After the graded CSE226 deliverable was complete, the following features
+were added at the project owner's request. They sit on top of the same
+multi-tenant architecture described above and are covered by the
+integration suite (§26.8).
+
+- **Performance**: Vercel functions were pinned to the `hnd1` (Tokyo)
+  region to co-locate compute with the Supabase database
+  (`ap-northeast-1`), and the frontend moved to route-level code splitting
+  (`React.lazy` per page, dynamic `import()` for the PDF-export library),
+  cutting the initial bundle from ~1.1MB to under 500KB.
+- **Notifications**: the existing in-app notification bell now also
+  covers org-wide "new memo submitted" broadcasts to Admins/Managers, and
+  a daily Vercel Cron job (`api/_cron/handlers.ts`, `vercel.json` →
+  `crons`) escalates memos stuck awaiting approval — Managers/Admins are
+  notified past 2 days, the memo's author past 5 days.
+- **Messaging**: a lightweight 1:1 inbox (`api/_messages`,
+  `frontend/src/pages/Messages.tsx`) lets any two members of the same
+  organization exchange direct messages, tenant-scoped like everything
+  else.
+- **Profile management**: users can upload a profile picture (Supabase
+  Storage, public `avatars` bucket) and change their login email
+  (`PUT /api/auth/email`) from Settings, alongside the pre-existing
+  authenticated change-password flow.
+- **Differentiated signup + approval gating**: joining an *existing*
+  organization now requires choosing Manager or Employee and goes through
+  a `JoinRequest` approval step — Employee requests are reviewed by that
+  org's own Admins/Managers, Manager requests by a platform administrator.
+  Creating a brand-new organization (the original flow) is untouched and
+  stays instant. New-org tenant isolation is covered by a dedicated
+  mid-session regression test.
+- **Platform administration**: a separate, top-level admin identity
+  (`PlatformAdmin` — no Organization/User row, its own auth path at
+  `/platform/login`) can browse every organization that has signed up,
+  drill into its Managers/Employees/memos/activity log, and ban/unban any
+  organization, user, or memo. Three placeholder platform-admin accounts
+  were seeded via `scripts/seed-platform-admins.ts` for the owner to
+  reassign.
+
+A serious pre-existing bug was also found and fixed during this work: the
+login handler called `signInWithPassword()` directly on the shared
+service-role Supabase client, which silently overwrites that client's
+session to whatever end user last logged in — breaking every subsequent
+service-role Storage/Admin call (file uploads included) for the rest of
+the server process's life. Login now uses a disposable client instead
+(`freshAuthClient()` in `api/_lib/auth.ts`).
+
 ## 26.9 Known Limitations
 
 - **Rich-text memo body (spec §3.1)**: the memo body is plain text, not
   rich text. The spec marks this as a "should," not a "shall."
 - **Email notifications**: not implemented. The spec marks this as
   optional ("may additionally support"); only in-app notifications exist.
-- **Bundle size**: the frontend production bundle is not code-split and
-  exceeds Vite's default 500KB warning threshold. It still loads and
-  functions correctly; this is a performance-polish item, not a
-  functional gap.
+- **Password OTP**: password reset uses a Supabase magic link sent to the
+  user's email rather than a numeric one-time code, since delivering a
+  numeric code requires customizing the Supabase project's email template
+  (a dashboard-only setting outside API/MCP reach). The change-password
+  flow inside Profile settings (authenticated, no email round-trip) is
+  unaffected and remains available.
 - No dedicated unit-test suite exists for individual functions — test
   coverage is black-box integration testing against the real running API
   and a real database, which was judged more valuable for this project's
