@@ -1,0 +1,15 @@
+node_modules/
+dist/
+frontend/dist/
+.env
+.env.local
+.env*.local
+.vercel/
+*.log
+.DS_Store
+prisma/migrations/dev.db
+.turbo/
+coverage/
+.vercel
+.env*
+.claude/

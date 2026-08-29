@@ -1,0 +1,55 @@
+{
+  "name": "mr-memo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "mr.memo — Inter-Office Memo Management System (multi-tenant SaaS)",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n API,WEB -c green,cyan \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:web": "npm run dev -w frontend",
+    "dev:api": "tsx watch scripts/dev-server.ts",
+    "build": "prisma generate && npm run build -w frontend",
+    "start": "npm run build && vercel dev --listen 8081",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "typecheck": "tsc --noEmit -p . && npm run typecheck -w frontend",
+    "test": "tsx tests/api.integration.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "@vercel/node": "^3.2.10",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "concurrently": "^9.0.1",
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vercel": "^59.9.1"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "core-js@3.50.0": true,
+    "prisma@5.22.0": true,
+    "fsevents@2.1.3": true,
+    "fsevents@2.3.3": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.27.0": true
+  }
+}

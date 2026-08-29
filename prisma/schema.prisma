@@ -1,0 +1,439 @@
+// mr.memo — Prisma schema
+// Multi-tenant inter-office memo management system
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum MemoPriority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MemoStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_REVIEW
+  PENDING_APPROVAL
+  CHANGES_REQUESTED
+  REJECTED
+  APPROVED
+  CANCELLED
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  SKIPPED
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  FORWARDED
+  COMMENTED
+}
+
+enum CommentType {
+  GENERAL
+  APPROVAL
+  REJECTION
+  CHANGE_REQUEST
+}
+
+enum NotificationType {
+  ACTION_REQUIRED
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  COMMENT
+  RESUBMITTED
+  COMPLETED
+  ASSIGNED
+}
+
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ============================================================
+// MULTI-TENANT ROOT
+// ============================================================
+
+model Organization {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  logoUrl      String?
+  contactEmail String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  departments        Department[]
+  users              User[]
+  categories         MemoCategory[]
+  memos              Memo[]
+  workflowSteps      WorkflowStep[]
+  approvals          Approval[]
+  comments           Comment[]
+  attachments        Attachment[]
+  memoVersions       MemoVersion[]
+  notifications      Notification[]
+  workflowTemplates  WorkflowTemplate[]
+  delegations        Delegation[]
+  auditLogs          AuditLog[]
+
+  @@map("organizations")
+}
+
+// ============================================================
+// ORG STRUCTURE
+// ============================================================
+
+model Department {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  status         EntityStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  users User[]
+  memos Memo[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("departments")
+}
+
+model User {
+  id             String       @id @default(uuid())
+  authId         String       @unique // Supabase auth.users.id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departmentId   String?
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  email       String
+  name        String
+  designation String?
+  role        UserRole   @default(USER)
+  status      UserStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memosAuthored       Memo[]              @relation("MemoAuthor")
+  workflowSteps       WorkflowStep[]      @relation("StepApprover")
+  workflowStepsDelegated WorkflowStep[]   @relation("StepDelegatedTo")
+  approvals           Approval[]          @relation("ApprovalDecider")
+  comments            Comment[]           @relation("CommentAuthor")
+  attachments         Attachment[]        @relation("AttachmentUploader")
+  memoVersions        MemoVersion[]       @relation("VersionCreator")
+  notifications       Notification[]      @relation("NotificationRecipient")
+  delegationsGiven    Delegation[]        @relation("DelegatingUser")
+  delegationsReceived Delegation[]        @relation("DelegateUser")
+  auditLogs           AuditLog[]          @relation("AuditActor")
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([departmentId])
+  @@map("users")
+}
+
+// ============================================================
+// CLASSIFICATION
+// ============================================================
+
+model MemoCategory {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  status         EntityStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  memos Memo[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("memo_categories")
+}
+
+model WorkflowTemplate {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  positions      Json // [{ position: 0, title: "Manager" }, ...]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@map("workflow_templates")
+}
+
+// ============================================================
+// MEMO CORE
+// ============================================================
+
+model Memo {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  memoNumber String // e.g. DEMO-2026-001, generated on submit
+  authorId   String
+  author     User   @relation("MemoAuthor", fields: [authorId], references: [id])
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  categoryId   String?
+  category     MemoCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  subject  String
+  body     String       @db.Text
+  priority MemoPriority @default(NORMAL)
+  status   MemoStatus   @default(DRAFT)
+
+  currentStepIndex Int @default(0)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  submittedAt DateTime?
+  completedAt DateTime?
+
+  workflowSteps WorkflowStep[]
+  approvals     Approval[]
+  comments      Comment[]
+  attachments   Attachment[]
+  versions      MemoVersion[]
+  notifications Notification[]
+
+  @@unique([organizationId, memoNumber])
+  @@index([organizationId])
+  @@index([authorId])
+  @@index([status])
+  @@map("memos")
+}
+
+model WorkflowStep {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memoId         String
+  memo           Memo         @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  position     Int
+  title        String? // e.g. "Manager", "Finance", "Director"
+  approverId   String
+  approver     User    @relation("StepApprover", fields: [approverId], references: [id])
+  delegatedToId String?
+  delegatedTo   User?  @relation("StepDelegatedTo", fields: [delegatedToId], references: [id])
+
+  status WorkflowStepStatus @default(PENDING)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  actedAt    DateTime?
+
+  approvals Approval[]
+
+  @@index([organizationId])
+  @@index([memoId])
+  @@index([approverId])
+  @@map("workflow_steps")
+}
+
+model Approval {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memoId         String
+  memo           Memo         @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  workflowStepId String
+  workflowStep   WorkflowStep @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
+
+  decision  ApprovalDecision
+  reason    String?          @db.Text
+  decidedById String
+  decidedBy   User           @relation("ApprovalDecider", fields: [decidedById], references: [id])
+  decidedAt   DateTime       @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([memoId])
+  @@index([workflowStepId])
+  @@map("approvals")
+}
+
+// ============================================================
+// COLLABORATION
+// ============================================================
+
+model Comment {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memoId         String
+  memo           Memo         @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User         @relation("CommentAuthor", fields: [authorId], references: [id])
+
+  type    CommentType @default(GENERAL)
+  content String      @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([memoId])
+  @@map("comments")
+}
+
+model Attachment {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memoId         String
+  memo           Memo         @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  uploadedById   String
+  uploadedBy     User         @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  fileName   String
+  fileSize   Int
+  mimeType   String
+  storageKey String // path within the Supabase Storage bucket
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([memoId])
+  @@map("attachments")
+}
+
+model MemoVersion {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memoId         String
+  memo           Memo         @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation("VersionCreator", fields: [createdById], references: [id])
+
+  versionNumber Int
+  subject       String
+  body          String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@unique([memoId, versionNumber])
+  @@index([organizationId])
+  @@index([memoId])
+  @@map("memo_versions")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  memoId         String?
+  memo           Memo?        @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  message String
+  read    Boolean          @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([read])
+  @@map("notifications")
+}
+
+// ============================================================
+// DELEGATION
+// ============================================================
+
+model Delegation {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  delegatingUserId String
+  delegatingUser   User   @relation("DelegatingUser", fields: [delegatingUserId], references: [id])
+  delegateId       String
+  delegate         User   @relation("DelegateUser", fields: [delegateId], references: [id])
+
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+  active    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([delegatingUserId])
+  @@map("delegations")
+}
+
+// ============================================================
+// AUDIT
+// ============================================================
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?        @relation("AuditActor", fields: [userId], references: [id], onDelete: SetNull)
+
+  eventType   String // e.g. "memo.created", "workflow.approved", "user.deactivated"
+  entityType  String // e.g. "Memo", "User", "Department"
+  entityId    String?
+  description String
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
