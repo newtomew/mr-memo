@@ -7,7 +7,8 @@ import { StatusBadge, PriorityBadge } from '@/components/Badges'
 import { WorkflowTimeline } from '@/components/WorkflowTimeline'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
 import type { Memo } from '@/lib/types'
-import { exportMemoPdf } from '@/lib/pdfExport'
+// Dynamically imported on click (jsPDF drags in html2canvas-sized deps
+// that no other page needs — no reason to ship them in the main bundle).
 
 type ActionKind = 'approve' | 'reject' | 'request-changes' | 'forward' | null
 
@@ -159,7 +160,10 @@ export default function MemoDetail() {
               </Button>
             )}
             {memo.status !== 'DRAFT' && (
-              <Button variant="secondary" onClick={() => exportMemoPdf(memo)}>
+              <Button
+                variant="secondary"
+                onClick={() => import('@/lib/pdfExport').then((m) => m.exportMemoPdf(memo))}
+              >
                 Export PDF
               </Button>
             )}
