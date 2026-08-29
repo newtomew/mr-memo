@@ -334,12 +334,16 @@ the server process's life. Login now uses a disposable client instead
 
 ## 27.1 AI Prompt and Response History
 
-**AI Prompt/Response History URL**: `[fill in — export this Claude Code session and host it somewhere accessible, e.g. as a file in the source ZIP, a Gist, or a shared doc]`
+**AI Prompt/Response History URL**: [https://gist.github.com/newtomew/1ebef242d4d914c933766baccd4cdf31](https://gist.github.com/newtomew/1ebef242d4d914c933766baccd4cdf31)
 
-Per §27 of the specification, this must be the actual conversation
-transcript (prompts and responses, in order, including debugging and
-corrections), not a summary. Export the session directly from Claude Code
-rather than retyping it.
+This is the complete, unabridged Claude Code session transcript (raw
+exported JSONL, one line per event, chronological) that built this
+project end-to-end — not a summary. Per §27's explicit allowance,
+credentials that appeared in the raw transcript (Postgres connection
+strings, Supabase JWTs/API keys, generated platform-admin passwords) were
+redacted in place with `[REDACTED-...]` markers before upload; every
+prompt, response, tool call, debugging step, and correction is otherwise
+preserved verbatim and in order.
 
 ---
 
