@@ -169,4 +169,3 @@ database (point `.env` at the prod Supabase project temporarily, or use
   `Approval`, and advances (or terminates) the memo.
 - **Audit trail**: every mutating action calls `logAudit()`, writing an
   immutable `AuditLog` row (event type, actor, entity, description).
-
